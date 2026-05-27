@@ -1,0 +1,56 @@
+{
+  "walkthrough_sources": [
+    {
+      "name": "游民星空",
+      "enabled": true,
+      "url": "https://www.gamersky.com",
+      "uses_proxy": false
+    }
+  ],
+  "wiki_sources": [
+    {
+      "name": "维基百科",
+      "enabled": true,
+      "type": "mediawiki",
+      "api_url": "https://zh.wikipedia.org/w/api.php",
+      "base_url": "https://zh.wikipedia.org",
+      "uses_proxy": true
+    },
+    {
+      "name": "萌娘百科",
+      "enabled": true,
+      "type": "mediawiki",
+      "api_url": "https://zh.moegirl.org.cn/api.php",
+      "base_url": "https://zh.moegirl.org.cn",
+      "uses_proxy": false
+    },
+    {
+      "name": "Wikibooks",
+      "enabled": true,
+      "type": "mediawiki",
+      "api_url": "https://en.wikibooks.org/w/api.php",
+      "base_url": "https://en.wikibooks.org",
+      "uses_proxy": true
+    },
+    {
+      "name": "GameFAQs",
+      "enabled": true,
+      "type": "gamefaqs",
+      "base_url": "https://gamefaqs.gamespot.com",
+      "uses_proxy": true
+    }
+  ],
+  "features": {
+    "use_search_engine": true,
+    "search_engine": "duckduckgo",
+    "max_results": 3
+  },
+  "proxy": {
+    "enabled": true,
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 10808,
+    "username": "",
+    "password": ""
+  }
+}

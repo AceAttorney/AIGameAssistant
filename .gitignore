@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+cache/
+.alma-snapshots/
+.trae/
+*.log
+*.html
+output.json
+debug_*
+*.zip
+.DS_Store
+Thumbs.db

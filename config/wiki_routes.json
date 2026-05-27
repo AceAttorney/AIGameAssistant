@@ -1,0 +1,364 @@
+{
+  "routes": [
+    {
+      "match": ["原神", "genshin", "genshin impact", "ys", "yuanshen"],
+      "sources": [
+        {
+          "name": "原神BWIKI",
+          "type": "biligame",
+          "domain": "genshin",
+          "url": "https://wiki.biligame.com/genshin/"
+        },
+        {
+          "name": "原神Fandom",
+          "type": "fandom",
+          "domain": "genshin-impact",
+          "url": "https://genshin-impact.fandom.com/zh/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["崩坏星穹铁道", "崩坏：星穹铁道", "星穹铁道", "star rail", "honkai star rail", "崩铁"],
+      "sources": [
+        {
+          "name": "星穹铁道BWIKI",
+          "type": "biligame",
+          "domain": "starrail",
+          "url": "https://wiki.biligame.com/starrail/"
+        },
+        {
+          "name": "星穹铁道Fandom",
+          "type": "fandom",
+          "domain": "honkai-star-rail",
+          "url": "https://honkai-star-rail.fandom.com/zh/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["绝区零", "zzz", "zenless", "zenless zone zero"],
+      "sources": [
+        {
+          "name": "绝区零BWIKI",
+          "type": "biligame",
+          "domain": "zzz",
+          "url": "https://wiki.biligame.com/zzz/"
+        },
+        {
+          "name": "绝区零Fandom",
+          "type": "fandom",
+          "domain": "zenless-zone-zero",
+          "url": "https://zenless-zone-zero.fandom.com/zh/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["崩坏3", "honkai impact 3rd", "崩坏三", "bh3"],
+      "sources": [
+        {
+          "name": "崩坏3BWIKI",
+          "type": "biligame",
+          "domain": "bh3",
+          "url": "https://wiki.biligame.com/bh3/"
+        }
+      ]
+    },
+    {
+      "match": ["明日方舟", "arknights", "方舟"],
+      "sources": [
+        {
+          "name": "明日方舟BWIKI",
+          "type": "biligame",
+          "domain": "arknights",
+          "url": "https://wiki.biligame.com/arknights/"
+        }
+      ]
+    },
+    {
+      "match": ["鸣潮", "wuthering waves", "ww"],
+      "sources": [
+        {
+          "name": "鸣潮BWIKI",
+          "type": "biligame",
+          "domain": "mc",
+          "url": "https://wiki.biligame.com/mc/"
+        },
+        {
+          "name": "鸣潮Fandom",
+          "type": "fandom",
+          "domain": "wutheringwaves",
+          "url": "https://wutheringwaves.fandom.com/zh/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["碧蓝航线", "azur lane", "blhx"],
+      "sources": [
+        {
+          "name": "碧蓝航线BWIKI",
+          "type": "biligame",
+          "domain": "blhx",
+          "url": "https://wiki.biligame.com/blhx/"
+        }
+      ]
+    },
+    {
+      "match": ["碧蓝档案", "blue archive", "ba"],
+      "sources": [
+        {
+          "name": "碧蓝档案BWIKI",
+          "type": "biligame",
+          "domain": "bluearchive",
+          "url": "https://wiki.biligame.com/bluearchive/"
+        }
+      ]
+    },
+    {
+      "match": ["英雄联盟", "league of legends", "lol", "撸啊撸"],
+      "sources": [
+        {
+          "name": "英雄联盟Fandom",
+          "type": "fandom",
+          "domain": "leagueoflegends",
+          "url": "https://leagueoflegends.fandom.com/zh/wiki/"
+        },
+        {
+          "name": "英雄联盟BWIKI",
+          "type": "biligame",
+          "domain": "lol",
+          "url": "https://wiki.biligame.com/lol/"
+        }
+      ]
+    },
+    {
+      "match": ["王者荣耀", "honor of kings", "wzry", "农药"],
+      "sources": [
+        {
+          "name": "王者荣耀萌百",
+          "type": "moegirl",
+          "domain": "王者荣耀",
+          "url": "https://zh.moegirl.org.cn/王者荣耀"
+        }
+      ]
+    },
+    {
+      "match": ["黑神话悟空", "黑神话：悟空", "black myth wukong", "黑悟空"],
+      "sources": [
+        {
+          "name": "黑神话BWIKI",
+          "type": "biligame",
+          "domain": "wukong",
+          "url": "https://wiki.biligame.com/wukong/"
+        }
+      ]
+    },
+    {
+      "match": ["宝可梦", "pokemon", "口袋妖怪", "宠物小精灵", "神奇宝贝"],
+      "sources": [
+        {
+          "name": "神奇宝贝百科",
+          "type": "bulbapedia",
+          "domain": "wiki.52poke.com",
+          "url": "https://wiki.52poke.com/"
+        }
+      ]
+    },
+    {
+      "match": ["我的世界", "minecraft", "mc"],
+      "sources": [
+        {
+          "name": "Minecraft中文Wiki",
+          "type": "minecraftwiki",
+          "domain": "minecraft.fandom.com",
+          "url": "https://minecraft.fandom.com/zh/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["泰拉瑞亚", "terraria"],
+      "sources": [
+        {
+          "name": "泰拉瑞亚Wiki",
+          "type": "terrariawiki",
+          "domain": "terraria.wiki.gg",
+          "url": "https://terraria.wiki.gg/zh/"
+        }
+      ]
+    },
+    {
+      "match": ["塞尔达传说", "zelda", "塞尔达"],
+      "sources": [
+        {
+          "name": "塞尔达Wiki",
+          "type": "zelda",
+          "domain": "zeldawiki",
+          "url": "https://zeldawiki.wiki/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["艾尔登法环", "elden ring", "法环"],
+      "sources": [
+        {
+          "name": "艾尔登法环Wiki",
+          "type": "fextralife",
+          "domain": "eldenring.wiki.fextralife.com",
+          "url": "https://eldenring.wiki.fextralife.com/"
+        }
+      ]
+    },
+    {
+      "match": ["第五人格", "identity v", "dwrg", "第五"],
+      "sources": [
+        {
+          "name": "第五人格BWIKI",
+          "type": "biligame",
+          "domain": "dwrg",
+          "url": "https://wiki.biligame.com/dwrg/"
+        }
+      ]
+    },
+    {
+      "match": ["阴阳师", "onmyoji", "yys"],
+      "sources": [
+        {
+          "name": "阴阳师BWIKI",
+          "type": "biligame",
+          "domain": "yys",
+          "url": "https://wiki.biligame.com/yys/"
+        }
+      ]
+    },
+    {
+      "match": ["重返未来1999", "重返未来：1999", "reverse 1999"],
+      "sources": [
+        {
+          "name": "重返未来BWIKI",
+          "type": "biligame",
+          "domain": "1999",
+          "url": "https://wiki.biligame.com/1999/"
+        }
+      ]
+    },
+    {
+      "match": ["少女前线", "girls frontline", "少前"],
+      "sources": [
+        {
+          "name": "少女前线Fandom",
+          "type": "fandom",
+          "domain": "girls-frontline",
+          "url": "https://girls-frontline.fandom.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["最终幻想14", "ff14", "final fantasy xiv", "ffxiv"],
+      "sources": [
+        {
+          "name": "FF14灰机Wiki",
+          "type": "huiji",
+          "domain": "ff14.huijiwiki.com",
+          "url": "https://ff14.huijiwiki.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["魔兽世界", "world of warcraft", "wow"],
+      "sources": [
+        {
+          "name": "魔兽世界灰机Wiki",
+          "type": "huiji",
+          "domain": "wow.huijiwiki.com",
+          "url": "https://wow.huijiwiki.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["恶魔城", "castlevania", "月下夜想曲", "晓月圆舞曲", "苍月十字架"],
+      "sources": [
+        {
+          "name": "恶魔城Fandom",
+          "type": "fandom",
+          "domain": "castlevania",
+          "url": "https://castlevania.fandom.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["生化危机", "resident evil", "biohazard", "恶灵古堡"],
+      "sources": [
+        {
+          "name": "生化危机Fandom",
+          "type": "fandom",
+          "domain": "residentevil",
+          "url": "https://residentevil.fandom.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["塞尔达传说", "zelda", "塞尔达"],
+      "sources": [
+        {
+          "name": "Zelda Wiki",
+          "type": "zeldawiki",
+          "domain": "zeldawiki.wiki",
+          "url": "https://zeldawiki.wiki/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["最终幻想", "final fantasy", "ff1", "ff2", "ff3", "ff4", "ff5", "ff6", "ff7", "ff8", "ff9", "ff10", "ff12", "ff13", "ff15", "ff16"],
+      "sources": [
+        {
+          "name": "最终幻想Fandom",
+          "type": "fandom",
+          "domain": "finalfantasy",
+          "url": "https://finalfantasy.fandom.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["星之卡比", "kirby", "卡比"],
+      "sources": [
+        {
+          "name": "星之卡比Wiki",
+          "type": "kirby",
+          "domain": "wikirby.com",
+          "url": "https://wikirby.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["火焰之纹章", "fire emblem", "火纹", "圣战之系谱", "烈火之剑", "风花雪月"],
+      "sources": [
+        {
+          "name": "火焰纹章Fandom",
+          "type": "fandom",
+          "domain": "fireemblem",
+          "url": "https://fireemblem.fandom.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["密特罗德", "银河战士", "metroid", "超级银河战士"],
+      "sources": [
+        {
+          "name": "银河战士Fandom",
+          "type": "fandom",
+          "domain": "metroid",
+          "url": "https://metroid.fandom.com/wiki/"
+        }
+      ]
+    },
+    {
+      "match": ["流放之路2", "流放之路", "path of exile 2", "poe2", "poe"],
+      "sources": [
+        {
+          "name": "POE2DB",
+          "type": "poe2db",
+          "url": "https://poe2db.tw/cn/",
+          "uses_proxy": false
+        }
+      ]
+    }
+  ]
+}

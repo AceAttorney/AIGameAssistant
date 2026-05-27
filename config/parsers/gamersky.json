@@ -1,0 +1,17 @@
+{
+  "name": "游民星空",
+  "domains": ["gamersky.com", "www.gamersky.com"],
+  "search": {
+    "url_pattern": "https://so.gamersky.com/all/handbook?s={keyword}",
+    "result_selector": "ul.txtlist li",
+    "title_selector": ".t2 a",
+    "link_selector": ".t2 a",
+    "summary_selector": ".con"
+  },
+  "content": {
+    "title_selector": "h1",
+    "content_selector": ".Mid2L_con, .article-content",
+    "image_selector": ".Mid2L_con img, .article-content img",
+    "image_containers": ["figure", ".img_wrapper"]
+  }
+}
