@@ -1,0 +1,9 @@
+# 文本文件统一 LF
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+
+# vendor 二进制/自动生成，不参与 diff
+vendor/* -diff
+vendor/**/* -diff
