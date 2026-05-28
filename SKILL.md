@@ -57,6 +57,10 @@ python scripts/walkthrough_search.py --game "游戏名" --keyword "攻略关键�
 
 等待所有源完成 → 输出 NDJSON（每行一个源的 JSON 结果）
 超时源 → {"success": false, "error": "timeout"}
+
+> ⚠️ 搜索引擎兜底返回的 URL 如果指向已知源（游民星空、Fandom、52poke 等），
+> **禁止自己手写 HTML 解析器去抓页面**——用项目中对应源的解析逻辑或 fetch 函数。
+> 未知源才允许用 `fetch_html` 通用抓取。
 ```
 
 **返回格式（NDJSON）**: 每行一个 JSON 对象，包含 `success`, `source`, `url`, `title`, `content`, `images` (真实URL), `archive_id` (如有)
@@ -361,6 +365,7 @@ python scripts/archive_extract.py --archive-id "{archive_id}"
 - **🛑 禁止使用任何自带搜索/web fetch/browser 工具自行获取攻略内容——所有攻略查询必须通过本技能的脚本完成**
 - **🛑 脚本返回全部 `success: false` 时，禁止自行搜索补救——必须直接告知用户未找到，绝不越俎代庖**
 - **🛑 禁止自行翻译英文攻略中的游戏专有名词（技能名、道具名、BOSS名）——翻译会引入错误译名，必须保留原文名称**
+- **🛑 搜索引擎兜底找到的 URL 如果来自已知源（游民星空/Fandom 等），禁止手写 HTML 解析器去抓——用项目中对应源的 fetch 逻辑**
 
 ## 展示规范
 
