@@ -4,9 +4,11 @@ common.py — walkthrough_search 和 wiki_search 的共享工具模块
 
 import sys
 import os
+import re
 import time
 import random
 import logging
+# (no urllib.parse imports needed — ddgs handles URL construction)
 
 # ── Vendor fallback: 沙箱环境下自带依赖，无需 pip install ──
 _vendor_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "vendor")
@@ -140,3 +142,35 @@ def source_needs_proxy(source):
     overseas = ["fandom.com", "wikipedia.org", "wikibooks.org", "gamefaqs",
                  "fextralife", "wiki.gg", "zeldawiki", "reddit.com"]
     return any(d in url for d in overseas)
+
+
+# ── 搜索引擎（通过 ddgs 库搜索，返回结果列表）──
+
+def search_engine_results(session, query, max_results=10):
+    """通过 ddgs 库搜索，返回 [{title, url, snippet}] 列表"""
+    from ddgs import DDGS
+
+    # Get proxy from session if configured
+    proxy = None
+    if session.proxies:
+        proxy_url = session.proxies.get("http") or session.proxies.get("https")
+        if proxy_url:
+            proxy = proxy_url
+
+    try:
+        results = DDGS(proxy=proxy, timeout=10).text(query, max_results=max_results, backend="auto")
+    except Exception as e:
+        logger.warning("[DDG] 搜索失败: %s", e)
+        return []
+
+    # Convert to our standard format
+    output = []
+    for r in results:
+        output.append({
+            "title": r.get("title", ""),
+            "url": r.get("href", ""),
+            "snippet": r.get("body", "")
+        })
+
+    logger.info("[DDG] 找到 %d 条结果", len(output))
+    return output

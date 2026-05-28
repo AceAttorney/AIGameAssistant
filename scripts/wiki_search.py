@@ -16,6 +16,7 @@ wiki_search.py - 游戏百科知识查询脚本
 """
 
 import argparse
+import concurrent.futures
 import json
 import sys
 import os
@@ -23,6 +24,11 @@ import re
 import logging
 import time
 from urllib.parse import urlencode, urljoin, quote_plus, urlparse
+
+# ── Vendor fallback: 沙箱环境下自带依赖，无需 pip install ──
+_vendor_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "vendor")
+if os.path.isdir(_vendor_dir):
+    sys.path.insert(0, _vendor_dir)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -107,7 +113,7 @@ def load_routes():
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import make_session, fetch_html, fetch_json, source_needs_proxy
+from common import make_session, fetch_html, fetch_json, source_needs_proxy, search_engine_results
 
 
 def make_absolute_url(base_url, url):
@@ -605,39 +611,26 @@ SEARCH_ENGINE = "duckduckgo"
 def search_via_engine(session, game, topic):
     """搜索引擎兜底（默认 DuckDuckGo）"""
     query = '"%s" %s' % (game, topic)
+
     if SEARCH_ENGINE == "duckduckgo":
-        url = "https://html.duckduckgo.com/html/?%s" % urlencode({"q": query})
+        # Use ddgs library instead of HTML scraping
+        engine_results = search_engine_results(session, query, max_results=5)
+        results = []
+        for r in engine_results:
+            results.append({"title": r["title"], "link": r["url"], "snippet": r["snippet"]})
     else:
         url = "https://www.bing.com/search?%s" % urlencode({"q": query})
-    logger.info("[%s] 搜索: %s", SEARCH_ENGINE, url)
+        logger.info("[%s] 搜索: %s", SEARCH_ENGINE, url)
 
-    try:
-        html = fetch_html(session, url)
-    except Exception as e:
-        logger.warning("[%s] 请求失败: %s", SEARCH_ENGINE, e)
-        return None
+        try:
+            html = fetch_html(session, url)
+        except Exception as e:
+            logger.warning("[%s] 请求失败: %s", SEARCH_ENGINE, e)
+            return None
 
-    soup = BeautifulSoup(html, "html.parser")
-    results = []
+        soup = BeautifulSoup(html, "html.parser")
+        results = []
 
-    if SEARCH_ENGINE == "duckduckgo":
-        for item in soup.select(".result, .web-result"):
-            a = item.select_one(".result__title a, .result__a")
-            if not a:
-                continue
-            title = a.get_text(strip=True)
-            link = a.get("href", "")
-            if "duckduckgo.com/l/" in link:
-                import urllib.parse as ulp
-                qs = ulp.parse_qs(ulp.urlparse(link).query)
-                real = qs.get("uddg", [""])[0]
-                if real:
-                    link = ulp.unquote(real)
-            snippet_el = item.select_one(".result__snippet, .snippet")
-            snippet = snippet_el.get_text(strip=True) if snippet_el else ""
-            if title and link:
-                results.append({"title": title, "link": link, "snippet": snippet})
-    else:
         for li in soup.select("li.b_algo"):
             h2 = li.select_one("h2 a")
             if not h2:
@@ -759,18 +752,39 @@ def main():
         logger.info("[Step 1] 专有Wiki路由均无结果，进入Step 2")
 
     # ── 第2步：通用MediaWiki源并行搜 ──
-    logger.info("[Step 2] 通用百科搜索，%d 个源", len(wiki_sources))
-    for source in wiki_sources:
-        source_type = source.get("type", "")
-        sess = session_proxy if source_needs_proxy(source) else session_direct
-        if source_type == "mediawiki":
-            result = search_mediawiki_source(sess, source, game, topic or "")
-            if result:
-                print(json.dumps(result, ensure_ascii=False, indent=2))
-                return
-        elif source_type == "gamefaqs":
-            logger.info("[GameFAQs] 暂不由API搜索，由搜索引擎兜底覆盖")
-            continue
+    mediawiki_sources = [s for s in wiki_sources if s.get("type") == "mediawiki"]
+    if mediawiki_sources:
+        logger.info("[Step 2] 通用百科搜索，%d 个源（并行）", len(mediawiki_sources))
+
+        def _run_one_wiki(src):
+            sess = session_proxy if source_needs_proxy(src) else session_direct
+            return search_mediawiki_source(sess, src, game, topic or "")
+
+        parallel_results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(mediawiki_sources)) as executor:
+            future_map = {
+                executor.submit(_run_one_wiki, src): src.get("name", "unknown")
+                for src in mediawiki_sources
+            }
+            for future in concurrent.futures.as_completed(future_map):
+                name = future_map[future]
+                try:
+                    result = future.result(timeout=20)
+                except concurrent.futures.TimeoutError:
+                    result = {"success": False, "error": "timeout", "source": name}
+                    logger.warning("[%s] 超时", name)
+                except Exception as e:
+                    result = {"success": False, "error": str(e)[:100], "source": name}
+                    logger.warning("[%s] 异常: %s", name, str(e)[:50])
+                if result and result.get("success"):
+                    parallel_results.append(result)
+
+        if parallel_results:
+            for r in parallel_results:
+                print(json.dumps(r, ensure_ascii=False))
+            return
+    else:
+        logger.info("[Step 2] 无MediaWiki源可用")
 
     # ── 第3步：Reddit 怀旧游戏社区 ──
     logger.info("[Step 3] Reddit 社区搜索")

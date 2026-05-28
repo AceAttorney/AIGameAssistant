@@ -25,89 +25,104 @@ description: "游戏攻略和知识查询助手。当玩家询问游戏攻略、
 - 资料查询：角色数据、敌人数据、物品数据
 - 历史信息：开发信息、更新日志、游戏评测
 
-### 查询工具
+## 查询工具
 
-#### walkthrough_search.py — 攻略查询
+### walkthrough_search.py — 攻略查询
 
 > **调用方式**: 必须用 `python <脚本路径>` 执行，不可直接 `./脚本名`（Windows 无 shebang 支持）。
 
 ```bash
-# 全链路搜索（首次查询或记忆未命中）
+# 并行全源搜索（默认模式）——所有源同时查询，NDJSON 格式输出
 python scripts/walkthrough_search.py --game "游戏名" --keyword "攻略关键词"
 
-# 单源直达（记忆命中 high 时使用——跳过其他源，秒级返回）
+# 单源直达（记忆命中 high 时使用——跳过其他源）
 python scripts/walkthrough_search.py --game "游戏名" --keyword "攻略关键词" --source gamersky
 python scripts/walkthrough_search.py --game "游戏名" --keyword "攻略关键词" --source archive
+python scripts/walkthrough_search.py --game "游戏名" --keyword "攻略关键词" --source reddit
 python scripts/walkthrough_search.py --game "游戏名" --keyword "攻略关键词" --source search
-
-# 可用 source 值: all | gamersky | archive | reddit | search
 ```
 
-**搜索顺序：**
+**可用 source 值**: `all` | `gamersky` | `archive` | `reddit` | `search`
+
+**并行模式搜索顺序**（`--source all` 或不指定 source）：
 ```
-Step 1: 游民星空（中文攻略站）
-  ├─ 翻页合并（最多5页）
-  ├─ 内容清洗（去页脚噪音/导航）
-  └─ 图片懒加载修复（data-src → 真实截图）
-Step 2: Archive.org 攻略书（官方攻略书扫描版）
-Step 3: Reddit 社区（retrogaming/Gameboy/nds/3DS/PSP等9个子板）
-Step 4: DuckDuckGo 搜索引擎兜底（优先游民/游侠/B站等攻略站）
+全部源并行启动（20 秒总超时）:
+├─ 游民星空（中文攻略站）
+│   ├─ 翻页合并（最多5页）
+│   ├─ 内容清洗（去页脚噪音/导航）
+│   └─ 图片懒加载修复（data-src → 真实截图）
+├─ Archive.org 攻略书（官方攻略书扫描版）
+├─ Reddit 社区（retrogaming/Gameboy/nds/3DS/PSP等9个子板）
+└─ DuckDuckGo 搜索引擎兜底（优先游民/游侠/B站等攻略站）
+
+等待所有源完成 → 输出 NDJSON（每行一个源的 JSON 结果）
+超时源 → {"success": false, "error": "timeout"}
 ```
 
-**返回字段：** `success`, `source`, `url`, `title`, `content`, `images` (真实URL), `archive_id` (如有)
+**返回格式（NDJSON）**: 每行一个 JSON 对象，包含 `success`, `source`, `url`, `title`, `content`, `images` (真实URL), `archive_id` (如有)
 
-#### wiki_search.py — 百科查询
+### wiki_search.py — 百科查询
+
 ```bash
 python scripts/wiki_search.py --game "游戏名" --topic "知识主题"
 ```
 
 **搜索顺序：**
 ```
-Step 1: 路由表匹配（30+游戏→专有Wiki: Fandom/BWiki/52poke等）
-Step 2: 通用Wiki（Wikipedia → 萌娘百科 → Wikibooks）
+Step 1: Wiki 路由匹配（config/wikis/ 目录下按游戏 slug 组织的独立配置文件）
+Step 2: 通用 Wiki（Wikipedia → 萌娘百科 → Wikibooks）
 Step 3: Reddit 社区
 Step 4: DuckDuckGo 搜索引擎兜底
 ```
 
 **数据源配置**: `config/sources.json`（攻略源/百科源/代理/功能开关）
-**路由表配置**: `config/wiki_routes.json`（游戏→专有Wiki映射）
+**游戏 Wiki 路由**: `config/wikis/<game-slug>.json`（每个游戏一个独立文件，英文 slug 命名）
 
-## 游戏名称补全与多名称变体搜索（重要）
+### name_resolve.py — 游戏名称补全
 
-玩家提供的游戏名称可能不是攻略站使用的精确名称。**必须在调用脚本前补全游戏名称，并使用多个名称变体进行搜索**。
-
-### 补全方法
-1. 使用搜索引擎搜索 `"{玩家给出的游戏名} 攻略"`（如 `"宝可梦叶绿 攻略"`)
-2. 从搜索结果标题中提取攻略站使用的完整游戏名称
-3. 收集所有可能名称变体，构建名称列表
-
-### 多名称变体搜索策略（必须执行）
-构建名称列表后，**按顺序调用脚本尝试**，直到返回结果或所有变体均失败：
-1. 首选名称（搜索引擎中最常见的完整名称）
-2. 英文名（Archive.org/Reddit/Fandom 需要英文名才能命中）
-3. 备选名称（别名、简体/繁中等）
-4. 玩家原始输入（回退）
-
-```
-示例流程（宝可梦叶绿）:
-  → 名称补全得到: ["宝可梦 火红/叶绿", "Pokemon FireRed LeafGreen", "口袋妖怪叶绿"]
-  → 先试 "宝可梦 火红/叶绿" → walkthrough_search
-    → 游民命中 → 成功
-  → 如果游民没命中，用 "Pokemon FireRed LeafGreen" 再试
-    → Archive.org 命中 Prima 官方攻略书 → 成功
-  → 两个都失败，用 "口袋妖怪叶绿" → ...
-  → 都失败则告知玩家
+```bash
+python scripts/name_resolve.py --game "玩家输入的原始名称"
 ```
 
-**重要**: 英文名变体对于 Archive.org、Fandom Wiki、Reddit 等海外源至关重要。中文游戏名在这些源中搜不到结果。
+**功能**：将口语/简称/别名补全为攻略站使用的规范名称。
+
+**工作流程**：
+1. 先查 `memory/NAMES.json` 映射表
+2. 命中 → 直接返回规范名称（含中文全称、英文全称、简写等变体）
+3. 未命中 → 调用搜索引擎搜索，返回候选名称列表（按搜索排名排序）
+4. AI 从候选列表中选出最准确的规范名称，去重合并
+5. AI 将确认的名称写入 `memory/NAMES.json`（含所有变体）
+
+**NAMES.json 结构示例**:
+```json
+{
+  "老头环": {
+    "name_zh": "艾尔登法环",
+    "name_en": "Elden Ring",
+    "aliases": ["ELDEN RING", "老头环", "法环"],
+    "source": "search_engine",
+    "confidence": "confirmed"
+  }
+}
+```
+
+**调用时机**: 在调用 walkthrough_search.py 或 wiki_search.py 之前，必须先完成名称补全。流程：
+```
+用户输入 → 查 NAMES.json → 
+  ├─ 命中 → 拿规范名 → 继续搜索
+  └─ 未命中 → name_resolve.py → AI 确认 → 写入 NAMES.json → 继续搜索
+```
 
 ## 记忆体系——越用越好的关键
+
+> **记忆体系替代缓存**: 本项目不依赖缓存机制。每次查询都是实时搜索，确保攻略内容始终最新。记忆体系通过路由优化让重复查询依然快速——INDEX 命中后单源直达，无需全链路搜索。
 
 ### 三层渐进披露
 
 ```
 memory/
 ├── INDEX.md              ← Layer 1: 路由索引（每次查询前必读）
+├── NAMES.json            ← Layer 1: 名称映射表（查询前先查）
 ├── sources/               ← Layer 2: 源详述（INDEX 指向后才读）
 │   ├── gamersky.md       游民星空
 │   ├── archive_org.md    Archive.org 攻略书
@@ -138,7 +153,8 @@ memory/
    → 决策: 调 wiki_search.py --game "宝可梦" --topic "宝石海星"
 
 3. INDEX 未命中 → 全链路搜索
-   → 找到结果 → 追加 INDEX（只要路由+质量）+ sources/*.md（数据细节）+ queries/今天.md
+   → 并行搜全部源 → 收集所有结果
+   → 追加 INDEX（只要路由+质量）+ sources/*.md（数据细节）+ queries/今天.md
 
 4. INDEX 命中但 quality=low
    → 跳过，选其他路由或全搜
@@ -148,7 +164,7 @@ memory/
 - **每次查询前**先读 `memory/INDEX.md`
 - INDEX 命中 high → `--source <路由>` 直达
 - INDEX 命中 low → 跳过，全搜或换路由
-- INDEX 未命中 → `--source all` 全搜，搜完追加三层记忆
+- INDEX 未命中 → 并行全搜，搜完追加三层记忆
 - 需要具体数据时（archive_id、截图数等）再去读 `memory/sources/*.md`
 
 ### 写入规则
@@ -165,17 +181,26 @@ memory/
 - 条件: 查询返回了新的细节信息（如新的 archive_id、新的高下载量攻略书、源的行为变化）
 - 写入: 追加记录行到对应源文件
 - 如果同一游戏+关键词已有记录 → 评估是否需要更新质量或备注
-- **不需要更新**的情况: 缓存命中、结果和上次完全一样、纯查询无新发现
+- **不需要更新**的情况: 结果和上次完全一样、纯查询无新发现
 
 **queries/YYYY-MM-DD.md — 每次查询都追加**
 - 条件: 无条件，每次查询结束都写一行
 - 写入: 搜索链（命中了哪些源）+ 最终结果摘要
 - 用途: 追溯排查用
 
+### 记忆质量维护
+
+每次更新记忆体系时，执行以下检查：
+- 扫描 INDEX 中所有 `quality=unrated` 且超过 5 次查询仍未打分的条目
+- 在适当时候向用户提问，请求确认该条目的质量
+- AI 初次写入 INDEX 时使用 `quality=unrated`，用户反馈后升级为 `high/medium/low`
+- 持续未被反馈的条目 → 提议删除，避免记忆库堆积垃圾数据
+
 ### 质量等级
-- **high**: 可直接使用，无需继续搜索
+- **high**: 可直接使用，无需继续搜索（仅用户确认后可设为 high）
 - **medium**: 内容可用但不够完整
 - **low**: 不可用（视频攻略、空页、错误），下次跳过此路由
+- **unrated**: AI 初判，尚未经用户确认
 
 ### 路由类型说明
 - `gamersky`: walkthrough 源，中文攻略站
@@ -185,67 +210,44 @@ memory/
 - `wiki→fandom`: wiki 源，Fandom 等路由表命中
 - `wiki→52poke`: wiki 源，神奇宝贝百科路由命中
 
-## Archive.org 攻略书处理（重要）
+## 多源结果整合（重要）
 
-当 `walkthrough_search.py` 返回 `archive_id` 字段时，表示找到了 Internet Archive 上的攻略书扫描版。**必须下载并提取相关内容，不能只贴链接。**
+当并行搜索返回多个源的结果时，**不应分别独立回复**，而应整合为一份综合攻略：
 
-### 下载和提取流程
+### 整合原则
+1. **去重合并**: 同一信息出现在多个源中，只保留最清晰的一份
+2. **互补补全**: 不同源提供不同角度的信息，合并成完整攻略
+3. **矛盾标注**: 如果两个源的信息互相矛盾，保留双方观点并标注分歧，让玩家自行判断
+4. **语言统一**: 中英文源的结果统一为用户提问语言
+5. **来源透明**: 每个信息片段标注来自哪个源
 
-**格式优先级：DjVuTXT > OCR Search Text > EPUB**
-
-archive.org 的扫描版攻略书会有 OCR 文本格式，优先使用。都找不到时才尝试 EPUB。
-
+### 整合流程
 ```
-1. 收到 archive_id
-
-2. 获取文件列表，按优先级找可用格式:
-   python -c "
-   import requests, json
-   r = requests.get('https://archive.org/metadata/{archive_id}')
-   files = r.json().get('files', [])
-   fmts = {'DjVuTXT': None, 'OCR Search Text': None, 'EPUB': None}
-   for f in files:
-       if f.get('format') in fmts and fmts[f['format']] is None:
-           fmts[f['format']] = f['name']
-   for fmt, name in fmts.items():
-       if name: print(f'{fmt}|{name}')
-   "
-
-3. 下载并读取:
-   # DjVuTXT / OCR Search Text — 直接读纯文本
-   r = requests.get('https://archive.org/download/{archive_id}/{filename}')
-   text = r.text  # 已经是纯文本
-
-   # EPUB — 需要 ebooklib 提取
-   pip install ebooklib
-   python -c "
-   import requests, ebooklib, io
-   from ebooklib import epub
-   r = requests.get('https://archive.org/download/{archive_id}/{epub_filename}')
-   book = epub.read_epub(io.BytesIO(r.content))
-   text = ''
-   for item in book.get_items():
-       if item.get_type() == ebooklib.ITEM_DOCUMENT:
-           from bs4 import BeautifulSoup
-           text += BeautifulSoup(item.get_content(), 'html.parser').get_text()
-   print(text[:1000])
-   "
-
-4. 搜索相关内容:
-   - 在文本中搜索用户关键词
-   - 提取前后各 1000 字符作为上下文
-   - 返回给玩家，标注来源
-
-5. 清理临时文件
+并行搜索 → 收集所有 NDJSON 结果 →
+├─ 分析各源内容的重叠和互补关系
+├─ 合并相同信息，保留互补信息
+├─ 标注矛盾（有则标注，无则跳过）
+└─ 输出整合攻略 + 各源链接
 ```
 
-### 注意事项
-- **格式优先级**: DjVuTXT（最优）> OCR Search Text > EPUB
-- DjVuTXT/OCR Search Text 是纯文本，下载秒级完成（<500KB），无需告知玩家等待
-- EPUB 需要 `ebooklib` 库，且仅对原生数字版攻略有效（扫描版 EPUB 内含图片无法提取）
-- 如果三种格式都没有（极少情况），告知玩家去在线查看页面手动阅读
-- 攻略书通常是英文的，直接返回英文内容，可附简要中文说明
+## Archive.org 攻略书处理
+
+当 walkthrough 返回 `archive_id` 时，用 `archive_extract.py` 下载攻略书文本到本地：
+
+```bash
+python scripts/archive_extract.py --archive-id "{archive_id}"
+```
+
+脚本自动完成：格式选择（DjVuTXT 优先）→ 检查缓存 → 下载 → 写入 `downloads/{archive_id}.txt` → 返回文件信息 + 元数据。
+
+下载完成后，AI 需要读取 `downloads/{archive_id}.txt` 并用**语义理解**（非关键词字符串匹配）来查找相关攻略内容：
+
+- **文件 < 100KB**: 使用 Read 工具读取全文
+- **文件 ≥ 100KB**: 使用 grep 找到相关段落，再用 Read 工具读取前后上下文
+
+- 返回内容已写入本地文件，AI 读取后语义理解并回复玩家
 - 始终标注来源为 "Internet Archive + 攻略书名"
+- 脚本失败则告知玩家去 Archive.org 在线查看
 
 ## 攻略验证——用 Wiki 校准攻略准确性
 
@@ -274,47 +276,24 @@ archive.org 的扫描版攻略书会有 OCR 文本格式，优先使用。都找
 ```
 
 ### 记忆记录
-- 验证通过: INDEX 记录 `quality=high`，备注"wiki验证一致"
+- 验证通过: INDEX 记录 `quality=high`（需用户最终确认），备注"wiki验证一致"
 - 验证失败: INDEX 记录 `quality=low`，备注具体的矛盾点
 
-## 代理配置
+## 查询类型分发
 
-本项目支持 HTTP/SOCKS5 代理，配置在 `config/sources.json` 的 `proxy` 段：
+当玩家问题同时包含攻略和知识需求（如「艾尔登法环玛莉卡背景故事和打法」），按以下决策树判断：
 
-```json
-"proxy": {
-  "enabled": true,
-  "type": "http",
-  "host": "127.0.0.1",
-  "port": 10808
-}
+```
+玩家提问
+├─ 仅含攻略关键词（怎么打/怎么过/BOSS/通关/任务/流程/收集）→ walkthrough_search
+├─ 仅含知识关键词（背景/故事/世界观/角色介绍/设定/属性/数据）→ wiki_search
+├─ 两者都有 → 两个脚本都调用，并行执行
+└─ 无法判断 → 默认两个都调用
 ```
 
-开启代理后可访问 Wikipedia、Fandom、Reddit、Archive.org 等海外源。
+## 环境与配置
 
-## 零安装部署
-
-依赖（requests, beautifulsoup4）已内置在 `vendor/` 目录中。脚本启动时自动从 vendor 加载，无需 `pip install`。
-
-**沙箱环境只需解压即可使用**，无需任何系统级安装权限。
-
-**可选依赖**: `ebooklib` + `beautifulsoup4`（仅 EPUB 格式攻略书备用，绝大多数情况不需要）
-
-**可选依赖**: `ebooklib` + `beautifulsoup4`（仅 EPUB 格式攻略书备用，绝大多数情况不需要）
-
-## 脚本特性
-
-### 内容质量
-- **翻页合并**: 游民星空等站多页攻略自动抓取合并（最多6页）
-- **内容清洗**: 自动去除页脚噪音（责任编辑、页码导航、投票、"拒绝访问"页等）
-- **图片修复**: 懒加载图片（data-src）→ 真实截图 URL（不再返回 blank.png 占位符）
-- **视频过滤**: 跳过标题含"视频"的攻略（无文本内容）
-
-### 稳定性
-- **24h 缓存**: 同一 query 只搜一次，再次调用秒级返回
-- **重试退避**: 请求失败自动重试3次，间隔指数增长（2s→4s→8s）
-- **请求间隔**: 每次请求随机延迟 0.3-1.5s，模拟真人浏览
-- **Referer 追踪**: 自动携带上一页 URL，模拟自然跳转
+依赖已内置在 `vendor/`，解压即用。代理、安装、脚本特性详见 [references/setup.md](references/setup.md)。
 
 ## 严格规范
 
@@ -322,121 +301,66 @@ archive.org 的扫描版攻略书会有 OCR 文本格式，优先使用。都找
 1. **只返回查询结果**: 所有回答必须基于脚本查询返回的真实内容
 2. **不编造信息**: 绝不允许自行编造攻略或知识内容
 3. **透明来源**: 必须明确告知玩家信息的来源网站
+4. **多源整合**: 并行搜索多个源时，整合为一份综合攻略而非分别回复
 
 ### 查询结果处理
 
 #### 找到结果时
 - 整理并返回查询到的攻略或知识内容
+- 多源结果整合为一份综合攻略，标注冲突
 - 标注信息来源和来源页面 URL
 - 若查询结果包含图片，使用 Markdown 格式展示
 
 #### 未找到结果时
 - 明确告知玩家未找到相关信息
 - 建议玩家尝试更精确的游戏名称或更换关键词
+- 如果多次换关键词仍无结果，建议到项目 GitHub 提交 issue，注明游戏名称和查询内容
 - 绝不使用"根据我的了解"等措辞进行编造
 
 ## 使用流程
 
 ### 1. 需求识别
-区分玩家需要的是攻略还是知识：
+区分玩家需要的是攻略还是知识（参见「查询类型分发」章节的决策树）：
 - **攻略类**: "怎么通关"、"Boss怎么打"、"任务怎么做"
 - **知识类**: "背景是什么"、"某个角色是谁"、"系统怎么玩"
+- **混合类**: 两者都有 → 两个脚本都调用
 
-### 2. 查记忆（重要——越用越快的关键）
+### 2. 游戏名称补全（必须首先执行）
+- 先查 `memory/NAMES.json` 映射表
+- 命中 → 使用映射表中的规范名称
+- 未命中 → 运行 `name_resolve.py` → AI 从候选列表确认规范名称 → 写入 NAMES.json
+
+### 3. 查记忆（重要——越用越快的关键）
 **每次查询前必须**先读 `memory/INDEX.md`：
-- 命中 high → 直接调对应源，跳过全链路搜索
-- 命中 low → 跳过该源，走全链路
-- 未命中 → 全链路搜索，搜完后追加记忆
+- 命中 high → 直接调对应源 `--source <路由>`，跳过其他源
+- 命中 low → 跳过该源，走并行全搜
+- 未命中 → 并行全链路搜索，搜完后追加记忆
 
-### 3. 信息提取
-从玩家问题中提取关键信息：
-- 游戏名称（玩家原始表述）
-- 具体需求关键词
-- 相关上下文
-
-### 4. 游戏名称补全（必须执行）
-- 用搜索引擎搜索 `"{游戏名称} 攻略"`
-- 从搜索结果标题中提取攻略站使用的完整游戏名称
-- 列出所有名称变体（完整名、别名、英文名等），按优先级排序
-
-### 5. 执行查询
-- **INDEX 命中**: 直接用最佳源调用脚本
-- **INDEX 未命中**: 多名称变体 + 全链路搜索
-- 脚本返回后评估质量，决定是否继续
+### 4. 执行查询
+- **INDEX 命中 high**: 单源直达 + wiki 交叉验证（如适用）
+- **INDEX 未命中或命中 low**: 并行全源搜索
+- **混合查询**: walkthrough 和 wiki 两个脚本并行调用
+- 等待所有源完成，收集 NDJSON 结果
 - **如果内容含具体数据声明**（技能/装备/数值）→ 用 wiki_search 交叉验证
-- 反馈给玩家，标注来源和验证结果
+- 整合多源结果为一份综合攻略，标注来源和矛盾
 - **更新三层记忆**（INDEX + sources + queries）
 
 ## 使用示例
 
-### 攻略查询（含名称补全 + 多名称变体搜索）
-```
-玩家: "宝可梦叶绿的全流程攻略？"
+详见 [references/examples.md](references/examples.md)。包含：攻略查询、知识查询、混合查询、Archive.org 查询、未找到结果的处理。
 
-执行步骤:
-1. 识别为攻略查询
-2. 提取: game="宝可梦叶绿", keyword="全流程"
-3. 名称补全: 搜索 "宝可梦叶绿 攻略"
-   收集名称变体: ["宝可梦 火红/叶绿", "口袋妖怪叶绿", "宝可梦叶绿"]
-4. 多名称变体搜索:
-   → walkthrough_search.py --game "宝可梦 火红/叶绿" --keyword "全流程" 
-   → 返回成功: title="《宝可梦火红叶绿》图文攻略 全剧情流程通关攻略"
-5. 整理返回攻略，标注来源
-```
-
-### 知识查询
-```
-玩家: "艾尔登法环的世界观是什么？"
-
-执行步骤:
-1. 识别为知识查询
-2. 提取: game="艾尔登法环", topic="世界观"
-3. 名称补全: 中文名+英文名 "Elden Ring"
-4. 调用 wiki_search.py --game "艾尔登法环" --topic "世界观"
-   → 路由命中 → Fextralife Wiki 返回背景介绍
-5. 整理返回，标注来源
-```
-
-### 怀旧游戏百科查询（通过 Archive.org）
-```
-玩家: "黄金太阳的精灵收集攻略"
-
-执行步骤:
-1. 识别为攻略+知识混合查询
-2. 提取: game="黄金太阳", keyword="精灵"
-3. 名称补全: 英文名 "Golden Sun"
-4. walkthrough_search.py --game "Golden Sun" --keyword "精灵"
-   → Archive.org 命中 Prima Official Strategy Guide
-   → 返回 archive_id + 下载链接
-5. 获取 DjVuTXT（已OCR纯文本）→ 搜索"精灵/Djinn" → 返回相关段落
-6. 标注来源: "Prime Official Strategy Guide (Internet Archive)"
-```
-
-### 未找到结果
-```
-玩家: "某游戏的某个隐藏任务"
-
-回复:
-"抱歉，我查询了多个攻略源，但没有找到关于该任务的攻略信息。
-可能原因：
-1. 游戏名称可能需要补全（请确认游戏的完整名称）
-2. 任务名称或描述可能有误
-3. 该任务可能是玩家自制内容，非官方内容
-4. 相关攻略尚未发布
-
-建议：
-- 尝试提供更准确的游戏名称和任务名称
-- 提供游戏的具体版本信息"
-```
-
-## 禁止行为
+## 禁止行为（红线——违反任何一条即为失败）
 
 - 禁止在未查询的情况下声称了解某游戏内容
 - 禁止编造攻略步骤或游戏知识
 - 禁止使用"我记得"、"据我所知"、"一般来说"等编造性措辞
 - 禁止混合多个查询结果编造新内容
 - 禁止忽略查询错误强行返回内容
-- **禁止自行猜测游戏名称，必须通过搜索引擎补全**
+- **禁止自行猜测游戏名称，必须通过 name_resolve.py 或搜索引擎补全**
+- **禁止在 Archive.org OCR 文本中使用关键词字符串搜索，必须使用语义理解**
+- **🛑 禁止使用任何自带搜索/web fetch/browser 工具自行获取攻略内容——所有攻略查询必须通过本技能的脚本完成**
+- **🛑 脚本返回全部 `success: false` 时，禁止自行搜索补救——必须直接告知用户未找到，绝不越俎代庖**
+- **🛑 禁止自行翻译英文攻略中的游戏专有名词（技能名、道具名、BOSS名）——翻译会引入错误译名，必须保留原文名称**
 
 ## 展示规范
 
@@ -444,6 +368,7 @@ archive.org 的扫描版攻略书会有 OCR 文本格式，优先使用。都找
 - 使用 Markdown 格式组织回复
 - 保留攻略/知识原文的层级结构（标题、列表等）
 - 提供原始页面链接供玩家查看完整内容
+- 多源整合时保持各源内容完整，避免信息丢失
 
 ### 图片内容
 - 查询结果包含图片时，按原文位置嵌入图片
@@ -453,6 +378,7 @@ archive.org 的扫描版攻略书会有 OCR 文本格式，优先使用。都找
 ### 来源标注
 - 每条回复末尾标注信息来源网站名称
 - 提供原始页面的完整 URL
+- 多源整合时，每个信息片段标注对应的来源
 - 来源类型示例：
   - 游民星空 → "来源：游民星空" + 原始链接
   - Fandom/52poke → "来源：Castlevania Fandom Wiki" + 页面链接

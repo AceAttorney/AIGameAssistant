@@ -13,6 +13,7 @@ walkthrough_search.py - 游戏攻略搜索脚本
 """
 
 import argparse
+import concurrent.futures
 import json
 import sys
 import os
@@ -21,6 +22,11 @@ import time
 import random
 import logging
 from urllib.parse import urlencode, urljoin, urlparse, quote_plus
+
+# ── Vendor fallback: 沙箱环境下自带依赖，无需 pip install ──
+_vendor_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "vendor")
+if os.path.isdir(_vendor_dir):
+    sys.path.insert(0, _vendor_dir)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -44,7 +50,6 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "config", "sources.json")
 PARSERS_DIR = os.path.join(PROJECT_ROOT, "config", "parsers")
-CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -110,7 +115,7 @@ def load_config():
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import make_session, fetch_html, fetch_json, source_needs_proxy
+from common import make_session, fetch_html, fetch_json, source_needs_proxy, search_engine_results
 
 
 def safe_select_one(soup, selector):
@@ -591,7 +596,7 @@ def search_archive_org(session, game, keyword):
     try:
         resp = session.get(ARCHIVE_SEARCH_URL, params={
             "q": query,
-            "fl[]": "identifier,title,downloads,description",
+            "fl[]": "identifier,title,downloads,description,subject,collection",
             "sort[]": "downloads desc",
             "rows": 3,
             "output": "json",
@@ -613,6 +618,8 @@ def search_archive_org(session, game, keyword):
     title = best.get("title", game)
     description = best.get("description", "")
     downloads = best.get("downloads", 0)
+    subject = best.get("subject", [])
+    collection = best.get("collection", [])
 
     logger.info("[Archive.org] 找到攻略书: %s (下载 %d 次)", title[:50], downloads)
 
@@ -631,6 +638,8 @@ def search_archive_org(session, game, keyword):
         "images": [],
         "is_search_engine": False,
         "archive_id": ident,
+        "subject": subject,
+        "collection": collection,
     }
 
 
@@ -720,75 +729,62 @@ def search_via_engine(session, game, keyword):
     query = '"%s" %s' % (game, keyword)
 
     if SEARCH_ENGINE == "duckduckgo":
-        url = "https://html.duckduckgo.com/html/?%s" % urlencode({"q": query})
-    elif SEARCH_ENGINE == "google":
-        url = "https://www.google.com/search?%s" % urlencode({"q": query, "hl": "zh-CN"})
+        # Use ddgs library instead of HTML scraping
+        engine_results = search_engine_results(session, query, max_results=5)
+        results = []
+        for r in engine_results:
+            results.append({"title": r["title"], "link": r["url"], "snippet": r["snippet"]})
     else:
-        url = "https://www.bing.com/search?%s" % urlencode({"q": query})
+        if SEARCH_ENGINE == "google":
+            url = "https://www.google.com/search?%s" % urlencode({"q": query, "hl": "zh-CN"})
+        else:
+            url = "https://www.bing.com/search?%s" % urlencode({"q": query})
 
-    logger.info("[%s] 搜索: %s", SEARCH_ENGINE, url)
-    try:
-        html = fetch_html(session, url)
-    except Exception as e:
-        logger.warning("[%s] 请求失败: %s", SEARCH_ENGINE, e)
-        return None
+        logger.info("[%s] 搜索: %s", SEARCH_ENGINE, url)
+        try:
+            html = fetch_html(session, url)
+        except Exception as e:
+            logger.warning("[%s] 请求失败: %s", SEARCH_ENGINE, e)
+            return None
 
-    soup = BeautifulSoup(html, "html.parser")
-    results = []
+        soup = BeautifulSoup(html, "html.parser")
+        results = []
 
-    if SEARCH_ENGINE == "duckduckgo":
-        for item in soup.select(".result, .web-result"):
-            a = item.select_one(".result__title a, .result__a")
-            if not a:
-                continue
-            title = extract_text(a)
-            link = extract_attr(a, "href")
-            # DDG 链接是跳转 URL，解码 uddg 参数获取真实地址
-            if "duckduckgo.com/l/" in link:
-                import urllib.parse as ulp
-                qs = ulp.parse_qs(ulp.urlparse(link).query)
-                real = qs.get("uddg", [""])[0]
-                if real:
-                    link = ulp.unquote(real)
-            snippet_el = item.select_one(".result__snippet, .snippet")
-            snippet = extract_text(snippet_el) if snippet_el else ""
-            if title and link:
-                results.append({"title": title, "link": link, "snippet": snippet})
-    elif SEARCH_ENGINE == "google":
-        for div in soup.select("div.g"):
-            h3 = div.select_one("h3")
-            a = h3.select_one("a") if h3 else None
-            if not a:
-                continue
-            title = extract_text(a)
-            link = extract_attr(a, "href")
-            if link.startswith("/url?"):
-                import urllib.parse as ulp
-                qs = ulp.parse_qs(ulp.urlparse(link).query)
-                link = qs.get("q", [link])[0]
-            snippet_el = div.select_one(".VwiC3b, span.aCOpRe, .lEBKkf")
-            snippet = extract_text(snippet_el) if snippet_el else ""
-            if title and link:
-                results.append({"title": title, "link": link, "snippet": snippet})
-    else:
-        for li in soup.select("li.b_algo"):
-            h2 = li.select_one("h2 a")
-            if not h2:
-                continue
-            title = extract_text(h2)
-            link = extract_attr(h2, "href")
-            if "bing.com/ck/a" in link:
-                import base64
-                match = re.search(r'[?&]u=([^&]+)', link)
-                if match:
-                    try:
-                        link = base64.urlsafe_b64decode(match.group(1) + "===").decode("utf-8")
-                    except Exception:
-                        pass
-            snippet_el = li.select_one(".b_caption p, .b_lineclamp2")
-            snippet = extract_text(snippet_el) if snippet_el else ""
-            if title and link:
-                results.append({"title": title, "link": link, "snippet": snippet})
+        if SEARCH_ENGINE == "google":
+            for div in soup.select("div.g"):
+                h3 = div.select_one("h3")
+                a = h3.select_one("a") if h3 else None
+                if not a:
+                    continue
+                title = extract_text(a)
+                link = extract_attr(a, "href")
+                if link.startswith("/url?"):
+                    import urllib.parse as ulp
+                    qs = ulp.parse_qs(ulp.urlparse(link).query)
+                    link = qs.get("q", [link])[0]
+                snippet_el = div.select_one(".VwiC3b, span.aCOpRe, .lEBKkf")
+                snippet = extract_text(snippet_el) if snippet_el else ""
+                if title and link:
+                    results.append({"title": title, "link": link, "snippet": snippet})
+        else:
+            for li in soup.select("li.b_algo"):
+                h2 = li.select_one("h2 a")
+                if not h2:
+                    continue
+                title = extract_text(h2)
+                link = extract_attr(h2, "href")
+                if "bing.com/ck/a" in link:
+                    import base64
+                    match = re.search(r'[?&]u=([^&]+)', link)
+                    if match:
+                        try:
+                            link = base64.urlsafe_b64decode(match.group(1) + "===").decode("utf-8")
+                        except Exception:
+                            pass
+                snippet_el = li.select_one(".b_caption p, .b_lineclamp2")
+                snippet = extract_text(snippet_el) if snippet_el else ""
+                if title and link:
+                    results.append({"title": title, "link": link, "snippet": snippet})
 
     if not results:
         logger.warning("[%s] 未找到结果", SEARCH_ENGINE)
@@ -830,47 +826,113 @@ def search_via_engine(session, game, keyword):
     return None
 
 
-# ── 主流程 ──
+# ── 并行搜索 ──
 
-# ── 缓存 ──
+def _run_all_parallel(game, keyword, sources, config, session_direct, session_proxy, use_engine):
+    """并行运行所有搜索源，返回结果列表（每个结果含 source 字段）"""
 
-CACHE_TTL = 86400  # 默认 24 小时
+    def _run_walkthrough():
+        """搜索所有 walkthrough 源，返回第一条有效结果"""
+        for source in sources:
+            sess = session_proxy if source_needs_proxy(source) else session_direct
+            name = source["name"]
+            try:
+                results, status = search_source(sess, source, game, keyword)
+            except Exception as e:
+                logger.warning("[%s] 搜索异常: %s", name, str(e)[:50])
+                continue
+            if status != "ok" or not results:
+                continue
+            domain_key = extract_domain_key(source["url"])
+            parser_path = os.path.join(PARSERS_DIR, "%s.json" % domain_key)
+            with open(parser_path, "r", encoding="utf-8") as f:
+                parser_config = json.load(f)
+            for rank, r in enumerate(results[:3]):
+                try:
+                    extracted = fetch_and_extract(sess, r["link"], name, parser_config)
+                except Exception as e:
+                    logger.warning("[%s] 提取异常: %s", name, str(e)[:50])
+                    continue
+                if extracted:
+                    return extracted
+        return {"success": False, "error": "no_results", "source": "walkthrough"}
 
-def _cache_key(game, keyword):
-    import hashlib
-    raw = "%s||%s" % (game, keyword)
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+    def _run_archive():
+        try:
+            result = search_archive_org(session_proxy, game, keyword)
+        except Exception as e:
+            logger.warning("[Archive] 异常: %s", str(e)[:50])
+            result = None
+        if result:
+            return result
+        return {"success": False, "error": "no_results", "source": "archive"}
 
-def cache_get(game, keyword):
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    key = _cache_key(game, keyword)
-    path = os.path.join(CACHE_DIR, key + ".json")
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        age = time.time() - data.get("_ts", 0)
-        if age > CACHE_TTL:
-            os.remove(path)
-            return None
-        logger.info("[缓存] 命中 (%d秒前)", int(age))
-        return data.get("_result")
-    except Exception:
-        return None
+    def _run_reddit():
+        try:
+            result = search_reddit(session_proxy, game, keyword)
+        except Exception as e:
+            logger.warning("[Reddit] 异常: %s", str(e)[:50])
+            result = None
+        if result:
+            return result
+        return {"success": False, "error": "no_results", "source": "reddit"}
 
-def cache_set(game, keyword, result):
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    key = _cache_key(game, keyword)
-    path = os.path.join(CACHE_DIR, key + ".json")
-    try:
-        payload = {"_ts": time.time(), "_result": result}
-        data_str = json.dumps(payload, ensure_ascii=False)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(data_str)
-        logger.info("[缓存] 已保存: %s (%d bytes)", key[:8], len(data_str))
-    except Exception as e:
-        logger.warning("[缓存] 保存失败: %s", str(e)[:40])
+    def _run_search_engine():
+        if not use_engine:
+            return {"success": False, "error": "disabled", "source": "search"}
+        try:
+            result = search_via_engine(session_proxy, game, keyword)
+        except Exception as e:
+            logger.warning("[Search] 异常: %s", str(e)[:50])
+            result = None
+        if result:
+            return result
+        return {"success": False, "error": "no_results", "source": "search"}
+
+    tasks = [
+        ("walkthrough", _run_walkthrough),
+        ("archive", _run_archive),
+        ("reddit", _run_reddit),
+        ("search", _run_search_engine),
+    ]
+
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        future_map = {executor.submit(fn): name for name, fn in tasks}
+        for future in concurrent.futures.as_completed(future_map):
+            name = future_map[future]
+            try:
+                result = future.result(timeout=20)
+            except concurrent.futures.TimeoutError:
+                result = {"success": False, "error": "timeout", "source": name}
+                logger.warning("[%s] 超时", name)
+            except Exception as e:
+                result = {"success": False, "error": str(e)[:100], "source": name}
+                logger.warning("[%s] 异常: %s", name, str(e)[:50])
+            if result:
+                # 确保 source 字段存在
+                if "source" not in result:
+                    result["source"] = name
+                results.append(result)
+
+    # 保持输出顺序：walkthrough, archive, reddit, search
+    order = {"walkthrough": 0, "archive": 1, "reddit": 2, "search": 3}
+    results.sort(key=lambda r: order.get(_task_name_from_result(r), 99))
+    return results
+
+
+def _task_name_from_result(result):
+    """从结果推断任务名"""
+    src = result.get("source", "").lower()
+    if any(kw in src for kw in ["游民", "gamersky", "walkthrough"]):
+        return "walkthrough"
+    if "archive" in src or "internet archive" in src:
+        return "archive"
+    if "reddit" in src:
+        return "reddit"
+    if any(kw in src for kw in ["搜索", "search", "引擎", "engine"]):
+        return "search"
+    return src
 
 
 # ── 主流程 ──
@@ -895,12 +957,6 @@ def main():
 
     setup_logging(args.debug)
 
-    # 检查缓存
-    cached = cache_get(game, keyword)
-    if cached:
-        print(json.dumps(cached, ensure_ascii=False, indent=2))
-        return
-
     config = load_config()
     sources = [s for s in config.get("walkthrough_sources", []) if s.get("enabled")]
     features = config.get("features", {})
@@ -908,17 +964,28 @@ def main():
 
     source_filter = args.source
 
-    def _run_source(name):
-        """检查 source_filter 是否允许运行该源"""
-        if source_filter == "all":
-            return True
-        return source_filter == name
-
     logger.info("数据源: %d 个 (筛选: %s)", len(sources), source_filter)
 
     proxy_cfg = config.get("proxy", {})
     session_direct = make_session(USER_AGENT, proxy_cfg, use_proxy=False, log_name="direct")
     session_proxy = make_session(USER_AGENT, proxy_cfg, use_proxy=True, log_name="proxy")
+
+    if source_filter == "all":
+        # ── 并行模式：同时运行所有源 ──
+        results = _run_all_parallel(
+            game, keyword, sources, config,
+            session_direct, session_proxy, use_engine
+        )
+        if not results:
+            results = [{"success": False, "error": "no_results"}]
+        for r in results:
+            print(json.dumps(r, ensure_ascii=False))
+        return
+
+    # ── 单源模式：保持原有顺序行为 ──
+    def _run_source(name):
+        """检查 source_filter 是否允许运行该源"""
+        return source_filter == name
 
     # 1) 遍历已配置的攻略站
     if _run_source("gamersky"):
@@ -941,7 +1008,6 @@ def main():
                 logger.info("[%s] 尝试 #%d: %s", name, rank + 1, r["link"])
                 extracted = fetch_and_extract(sess, r["link"], name, parser_config)
                 if extracted:
-                    cache_set(game, keyword, extracted)
                     print(json.dumps(extracted, ensure_ascii=False, indent=2))
                     return
     else:
@@ -952,7 +1018,6 @@ def main():
         logger.info("搜索Archive.org攻略书")
         archive_result = search_archive_org(session_proxy, game, keyword)
         if archive_result:
-            cache_set(game, keyword, archive_result)
             print(json.dumps(archive_result, ensure_ascii=False, indent=2))
             return
 
@@ -961,7 +1026,6 @@ def main():
         logger.info("搜索Reddit社区")
         reddit_result = search_reddit(session_proxy, game, keyword)
         if reddit_result:
-            cache_set(game, keyword, reddit_result)
             print(json.dumps(reddit_result, ensure_ascii=False, indent=2))
             return
 
@@ -970,7 +1034,6 @@ def main():
         logger.info("启用搜索引擎兜底 (%s)", SEARCH_ENGINE)
         result = search_via_engine(session_proxy, game, keyword)
         if result:
-            cache_set(game, keyword, result)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
 
