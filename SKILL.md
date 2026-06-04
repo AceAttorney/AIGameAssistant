@@ -82,40 +82,71 @@ Step 4: DuckDuckGo 搜索引擎兜底
 **数据源配置**: `config/sources.json`（攻略源/百科源/代理/功能开关）
 **游戏 Wiki 路由**: `config/wikis/<game-slug>.json`（每个游戏一个独立文件，英文 slug 命名）
 
-### name_resolve.py — 游戏名称补全
+### name_resolve.py — 游戏名称补全（Wikipedia + RAWG 双重校验）
 
 ```bash
-python scripts/name_resolve.py --game "玩家输入的原始名称"
+# AI 翻译英文名后调用（推荐）
+python scripts/name_resolve.py --game "老头环" --en-name "Elden Ring"
+
+# 无英文名时（AI 不知道这个游戏）
+python scripts/name_resolve.py --game "老头环"
 ```
 
-**功能**：将口语/简称/别名补全为攻略站使用的规范名称。
+**功能**：将口语/简称/别名补全为规范名称，通过 Wikipedia + RAWG 双重校验确保准确性。
 
 **工作流程**：
-1. 先查 `memory/NAMES.json` 映射表
-2. 命中 → 直接返回规范名称（含中文全称、英文全称、简写等变体）
-3. 未命中 → 调用搜索引擎搜索，返回候选名称列表（按搜索排名排序）
-4. AI 从候选列表中选出最准确的规范名称，去重合并
-5. AI 将确认的名称写入 `memory/NAMES.json`（含所有变体）
+1. AI 先用世界知识将玩家输入翻译为英文名（如"老头环"→"Elden Ring"）
+2. 调用 `name_resolve.py --game "老头环" --en-name "Elden Ring"`
+3. 脚本内部流程：
+   ```
+   L1: NAMES.json 缓存命中 → 秒回
+   
+   L2: Wikipedia(en+zh) ══╗  并行搜索，谁先回来用谁
+        RAWG(en)        ══╝
+        ↓
+        合并: 两边都命中同一游戏 → confidence: high
+              只有一边命中        → confidence: medium
+              两边命中但不同游戏   → confidence: low (返回 candidates 让 AI 判断)
+              两边都没命中        → 降级 L3
+   
+   L3: 游民星空站内搜（不需要代理，中文昵称的最后保险）
+   
+   L4: DDG 搜索引擎兜底（代理可用时）
+   ```
 
-**NAMES.json 结构示例**:
+**返回格式**：
 ```json
 {
-  "老头环": {
+  "found": true,
+  "names": {
     "name_zh": "艾尔登法环",
     "name_en": "Elden Ring",
-    "aliases": ["ELDEN RING", "老头环", "法环"],
-    "source": "search_engine",
-    "confidence": "confirmed"
-  }
+    "aliases": ["ELDEN RING", "老头环", "法环", "エルデンリング"],
+    "source": "wikipedia+rawg",
+    "confidence": "high"
+  },
+  "confidence": "high",
+  "sources": {"wikipedia": true, "rawg": true, "gamersky": false, "ddg": false}
 }
 ```
 
 **调用时机**: 在调用 walkthrough_search.py 或 wiki_search.py 之前，必须先完成名称补全。流程：
 ```
-用户输入 → 查 NAMES.json → 
-  ├─ 命中 → 拿规范名 → 继续搜索
-  └─ 未命中 → name_resolve.py → AI 确认 → 写入 NAMES.json → 继续搜索
+玩家输入 → AI 世界知识翻译英文名 →
+  → name_resolve.py --game "老头环" --en-name "Elden Ring"
+  → 拿规范名 → 继续攻略/百科搜索
 ```
+
+**AI 翻译规则**：
+- 常见游戏直接用世界知识翻译（老头环=Elden Ring、法环=Elden Ring、原神=Genshin Impact 等）
+- 不确定时只传 `--game`，让 Wikipedia 中文搜索兜底
+- 翻译结果不需要完美，Wikipedia + RAWG 会做校验
+
+**RAWG 配置**：
+- 需要在 `config/sources.json` 的 `rawg` 段配置 `client_id` 和 `client_secret`
+- 从 [Twitch Developer Portal](https://dev.twitch.tv/console/apps) 获取
+- RAWG 走代理（`api.rawg.com` 和 `id.twitch.tv` 需要代理）
+- 未配置时自动跳过 RAWG，仅用 Wikipedia + 攻略站
 
 ## 记忆体系——越用越好的关键
 
@@ -253,9 +284,9 @@ python scripts/archive_extract.py --archive-id "{archive_id}"
 - 始终标注来源为 "Internet Archive + 攻略书名"
 - 脚本失败则告知玩家去 Archive.org 在线查看
 
-## 攻略验证——用 Wiki 校准攻略准确性
+## 攻略验证——RAWG + Wikipedia 双重校准
 
-当 walkthrough 返回的攻略内容包含**具体的游戏数据声明**时（装备名、技能名、Boss名、属性数值等），用 wiki_search 做交叉验证：
+当 walkthrough 返回的攻略内容包含**具体的游戏数据声明**时（装备名、技能名、Boss名、属性数值等），用 wiki_search + RAWG 做双重交叉验证：
 
 ### 验证时机
 - BD/Build 攻略（装备推荐、技能组合）
@@ -268,19 +299,20 @@ python scripts/archive_extract.py --archive-id "{archive_id}"
 1. walkthrough 返回攻略 → AI 提取其中的数据声明
    eg: "用寒冰弹+元素集中，堆到 100% 暴击率"
 
-2. wiki_search 查关键数据
-   → wiki_search --game "游戏名" --topic "寒冰弹"
-   → wiki_search --game "游戏名" --topic "元素集中"
-   → 验证: 技能是否存在？数值是否匹配？组合是否可能？
+2. 双重验证（并行）
+   → wiki_search --game "游戏名" --topic "寒冰弹"       ← 非结构化文本验证
+   → RAWG (rawg_client.py search) 用英文名验证游戏基本信息  ← 结构化数据验证
+   → 验证: 技能是否存在？游戏平台/发售日是否匹配？数值是否合理？
 
 3. 判断
-   ├─ wiki 数据一致 → high 信心，直接返给玩家
+   ├─ wiki + RAWG 一致 → high 信心，直接返给玩家
+   ├─ 仅一方验证通过 → medium，标注单源验证
    ├─ wiki 数据矛盾 → medium，标注潜在问题
    └─ wiki 无数据 → 不做额外标记，保留原质量评级
 ```
 
 ### 记忆记录
-- 验证通过: INDEX 记录 `quality=high`（需用户最终确认），备注"wiki验证一致"
+- 验证通过（双源一致）: INDEX 记录 `quality=high`（需用户最终确认），备注"wiki+rawg验证一致"
 - 验证失败: INDEX 记录 `quality=low`，备注具体的矛盾点
 
 ## 查询类型分发

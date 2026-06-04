@@ -37,6 +37,11 @@
     "use_search_engine": false,
     "search_engine": "bing",
     "max_results": 10
+  },
+  "rawg": {
+    "enabled": true,
+    "api_key": "",
+    (暂无)
   }
 }
 ```
@@ -60,6 +65,15 @@
 ### 开关配置场景
 - **关闭搜索引擎** (`use_search_engine: false`): 仅使用配置的攻略站和百科源，保证来源可靠性
 - **开启搜索引擎** (`use_search_engine: true`): 配置源无结果时启用搜索引擎，必须标注来源
+
+#### RAWG 配置 (rawg)
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| enabled | boolean | 是否启用 RAWG API |
+| api_key | string | RAWG API Key（无需 OAuth） |
+| (已合并到 api_key) |
+
+RAWG 通过 API Key 鉴权。脚本自动管理 token 缓存（`cache/rawg_token.json`），不需要手动刷新。
 
 ---
 
@@ -224,6 +238,71 @@ enabled_sources = [s for s in config['wiki_sources'] if s['enabled']]
     "is_search_engine": false
 }
 ```
+
+### name_resolve.py — Wikipedia + RAWG 双重校验
+
+```python
+# 配置文件读取
+config = load_config('config/sources.json')
+rawg_cfg = config.get('rawg', {})
+proxy_cfg = config.get('proxy', {})
+
+# 输入参数
+{
+    "game": "玩家原始输入（如'老头环'）",
+    "en_name": "AI翻译的英文名（如'Elden Ring'）"  # 可选
+}
+
+# 四级降级搜索
+# L1: NAMES.json 缓存命中 → 直接返回
+# L2: Wikipedia(en+zh) + RAWG(en) 并行
+# L3: 游民星空站内搜 fallback
+# L4: DDG 搜索引擎兜底
+
+# 返回格式
+{
+    "found": true/false,
+    "names": {
+        "name_zh": "艾尔登法环",
+        "name_en": "Elden Ring",
+        "aliases": ["ELDEN RING", "老头环", "法环"],
+        "source": "wikipedia+rawg",     # wikipedia / rawg / wikipedia+rawg / gamersky / ddg
+        "confidence": "high"            # high / medium / low / unrated / none
+    },
+    "confidence": "high",
+    "sources": {
+        "wikipedia": true,
+        "rawg": true,
+        "gamersky": false,
+        "ddg": false
+    },
+    "candidates": []  # confidence=low 时返回 AI 可判断的候选列表
+}
+```
+
+### rawg_client.py — RAWG API 客户端
+
+```python
+# OAuth 认证 → Token 缓存 → API 请求
+from rawg_client import RAWGClient
+
+client = RAWGClient(client_id, client_secret, proxy_cfg)
+
+# 搜索游戏
+results = client.search_games("Elden Ring", limit=5)
+# → [{name, alternative_names, platforms, genres, first_release_date, summary, ...}]
+
+# 获取游戏详情
+game = client.get_game(119133)
+# → {name, storyline, involved_companies, rating, websites, ...}
+```
+
+**认证流程**:
+1. POST `https://id.twitch.tv/oauth2/token` 获取 access_token
+2. Token 缓存到 `cache/rawg_token.json`（默认有效期 60 天）
+3. 请求时自动检查过期并刷新
+
+**代理**: 走 `config/sources.json` 的 proxy 配置（需要代理，`api.rawg.com` 和 `id.twitch.tv` 均为 Twitch 基础设施）
 
 ---
 

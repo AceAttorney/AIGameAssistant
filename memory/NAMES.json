@@ -1,9 +1,34 @@
 {
   "老头环": {
-    "name_zh": "艾尔登法环",
+    "name_zh": "艾爾登法環",
     "name_en": "Elden Ring",
-    "aliases": ["ELDEN RING", "老头环", "法环"],
-    "source": "search_engine",
-    "confidence": "confirmed"
+    "aliases": [],
+    "source": "wikipedia+rawg",
+    "confidence": "high",
+    "platforms": [
+      "PC",
+      "Xbox One",
+      "PlayStation 4",
+      "Xbox Series S/X",
+      "PlayStation 5"
+    ],
+    "released": "2022-02-25",
+    "rating": 4.39,
+    "metacritic": 95
+  },
+  "黑神话": {
+    "name_zh": "黑神话：悟空",
+    "name_en": "Black Myth: Wukong",
+    "aliases": [],
+    "source": "wikipedia+rawg",
+    "confidence": "high",
+    "platforms": [
+      "PC",
+      "Xbox Series S/X",
+      "PlayStation 5"
+    ],
+    "released": "2024-08-20",
+    "rating": 4.31,
+    "metacritic": null
   }
 }

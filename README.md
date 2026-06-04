@@ -35,6 +35,7 @@
 | 🎯 源 | 📝 说明 |
 |-------|---------|
 | Fandom/BWiki/52poke | 30+ 游戏路由表（`config/wikis/` 目录，每游戏独立维护） |
+| RAWG API | 结构化游戏数据库 · 别名/平台/发售日 · API Key 鉴权 |
 | Wikipedia/萌娘百科 | 通用百科 · MediaWiki API |
 | Wikibooks | 开放性攻略书 |
 
@@ -49,7 +50,7 @@
 | **自进化记忆** | INDEX 路由表 · 三档质量（unrated→high/low）· 用户反馈驱动 |
 | **代理按源配置** | 国内源直连，海外源走代理 · HTTP/SOCKS5 |
 | **零安装部署** | requests/bs4 内置 `vendor/`，解压即用 |
-| **攻略验证** | Wiki 数据交叉校准攻略声明的准确性 |
+| **攻略验证** | RAWG + Wikipedia 双重校准攻略声明的准确性 |
 
 ---
 
@@ -109,21 +110,25 @@ Step 3: Reddit 社区
 Step 4: DuckDuckGo 兜底
 ```
 
-### 名称补全
+### 名称补全（Wikipedia + RAWG 双重校验）
 
 ```
-玩家输入 → 查 memory/NAMES.json →
-  ├─ 命中 → 返回规范名 → 继续搜索
-  └─ 未命中 → name_resolve.py → AI 确认 → 写入 NAMES.json
+玩家输入 → AI 世界知识翻译英文名 →
+  → name_resolve.py --game "老头环" --en-name "Elden Ring"
+  → L1: NAMES.json 缓存命中 → 秒回
+  → L2: Wikipedia(en+zh) + RAWG(en) 并行
+  → L3: 游民星空 fallback
+  → L4: DDG 兜底
 ```
 
 ### 攻略验证
 
-当攻略内容包含具体游戏数据声明时，自动用 wiki 交叉验证：
+当攻略内容包含具体游戏数据声明时，自动用 RAWG + Wikipedia 双重交叉验证：
 
 | 验证结果 | 处理 |
 |---------|------|
-| wiki 数据一致 | high 信心，直接返回 |
+| RAWG + Wikipedia 双源一致 | high 信心，直接返回 |
+| 仅一方验证通过 | medium，标注单源验证 |
 | wiki 数据矛盾 | medium，标注潜在问题 |
 | wiki 无数据 | 保留原质量评级 |
 
@@ -144,7 +149,8 @@ AIGameAssistant/
 │   ├── common.py             # 共享模块（Session/ddgs/反爬/代理/Vendor）
 │   ├── walkthrough_search.py # 攻略搜索（并行+NDJSON）
 │   ├── wiki_search.py        # 百科搜索
-│   ├── name_resolve.py       # 游戏名称补全
+│   ├── name_resolve.py       # 游戏名称补全（Wikipedia+RAWG双重校验）
+│   ├── rawg_client.py        # RAWG API 客户端（API Key+搜索）
 │   └── archive_extract.py    # Archive.org 攻略书下载
 ├── references/               # 技能参考文档
 │   ├── examples.md           # 使用示例

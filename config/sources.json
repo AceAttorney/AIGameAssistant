@@ -9,11 +9,19 @@
   ],
   "wiki_sources": [
     {
-      "name": "维基百科",
+      "name": "维基百科 (中文)",
       "enabled": true,
       "type": "mediawiki",
       "api_url": "https://zh.wikipedia.org/w/api.php",
       "base_url": "https://zh.wikipedia.org",
+      "uses_proxy": true
+    },
+    {
+      "name": "维基百科 (英文)",
+      "enabled": true,
+      "type": "mediawiki",
+      "api_url": "https://en.wikipedia.org/w/api.php",
+      "base_url": "https://en.wikipedia.org",
       "uses_proxy": true
     },
     {
@@ -52,5 +60,9 @@
     "port": 10808,
     "username": "",
     "password": ""
+  },
+  "rawg": {
+    "enabled": true,
+    "api_key": "e36bda362af64a19a86c20e37ec767a4"
   }
 }
